@@ -5,6 +5,7 @@ from typing import Tuple
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from rest_framework.exceptions import ValidationError
 
 from tenants.models import Tenant
 from wallets.exceptions import (
@@ -13,10 +14,33 @@ from wallets.exceptions import (
     InvalidAmount,
     SameWalletTransfer,
 )
-from wallets.models import Transaction, TransactionStatus, TransactionType, Wallet
+from wallets.models import Customer, Transaction, TransactionStatus, TransactionType, Wallet
 from wallets.selectors import get_wallet_for_tenant_locked
 
 logger = logging.getLogger(__name__)
+
+
+def create_customer_with_wallet(
+    tenant: Tenant, username: str, email: str, currency: str = "BDT"
+) -> Tuple[Customer, Wallet]:
+    try:
+        with transaction.atomic():
+            customer = Customer.objects.create(
+                tenant=tenant,
+                username=username,
+                email=email,
+            )
+            wallet = Wallet.objects.create(
+                tenant=tenant,
+                customer=customer,
+                currency=currency,
+                cached_balance=0,
+            )
+            return (customer, wallet)
+    except IntegrityError:
+        raise ValidationError(
+            {"username": [f"Customer with username '{username}' already exists."]}
+        )
 
 
 def _check_idempotency(

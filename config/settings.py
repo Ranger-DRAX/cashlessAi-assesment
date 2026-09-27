@@ -88,6 +88,7 @@ REST_FRAMEWORK: dict = {
     "DEFAULT_PERMISSION_CLASSES": [
         "tenants.permissions.IsTenantAuthenticated",
     ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
+    "DEFAULT_PAGINATION_CLASS": "wallets.pagination.TransactionCursorPagination",
     "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "wallets.exceptions.wallet_exception_handler",
 }
