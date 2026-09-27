@@ -135,6 +135,12 @@ DEFAULT_AUTO_FIELD: str = "django.db.models.BigAutoField"
 # =============================================================================
 
 REST_FRAMEWORK: dict = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "tenants.authentication.TenantAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "tenants.permissions.IsTenantAuthenticated",
+    ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
 }
