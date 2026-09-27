@@ -1,5 +1,3 @@
-"""URL configuration for the Cashless Wallet API project."""
-
 from django.contrib import admin
 from django.urls import include, path
 
