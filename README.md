@@ -65,7 +65,7 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-The API is now available at `http://localhost:8000/api/`.
+The API is now available at `http://localhost:8000/api/` (Interactive Swagger docs: `http://localhost:8000/api/docs/`).
 
 ### Getting a tenant API key
 

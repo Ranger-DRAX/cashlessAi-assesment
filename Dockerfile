@@ -6,9 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install curl for container health checks if needed
+# Install system packages (curl for health checks, postgresql-client for dbshell)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first (leverages Docker cache layer)

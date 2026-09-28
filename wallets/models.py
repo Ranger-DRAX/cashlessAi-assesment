@@ -57,12 +57,19 @@ class Transaction(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.PROTECT, related_name="transactions")
     wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="transactions")
     type = models.CharField(max_length=20, choices=TransactionType.choices)
-    amount = models.BigIntegerField()
+    amount = models.BigIntegerField(
+        help_text="Always positive; direction is implied by the transaction type."
+    )
     related_transaction = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="linked_transaction"
     )
     idempotency_key = models.CharField(max_length=255, db_index=True)
-    request_hash = models.CharField(max_length=64, blank=True, default="")
+    request_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Hash of the request payload; used to detect idempotency conflicts.",
+    )
     status = models.CharField(
         max_length=10, choices=TransactionStatus.choices, default=TransactionStatus.COMPLETED
     )
