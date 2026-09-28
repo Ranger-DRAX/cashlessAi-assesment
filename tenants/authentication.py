@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import uuid
 from typing import Optional, Tuple
 
 from rest_framework.authentication import BaseAuthentication
@@ -25,8 +24,12 @@ class TenantAuthentication(BaseAuthentication):
     def authenticate(self, request: Request) -> Optional[Tuple[TenantPrincipal, None]]:
         auth_header = request.META.get("HTTP_AUTHORIZATION")
         if auth_header is None:
-            # Fallback to X-Tenant-ID header per spec requirement
-            x_tenant_key = request.META.get("HTTP_X_TENANT_ID") or request.META.get("HTTP_X_TENANT_KEY")
+            # Fallback to X-Tenant-ID, X-Api-Key, or X-Tenant-Key header per spec requirement
+            x_tenant_key = (
+                request.META.get("HTTP_X_TENANT_ID")
+                or request.META.get("HTTP_X_API_KEY")
+                or request.META.get("HTTP_X_TENANT_KEY")
+            )
             if not x_tenant_key:
                 return None
             key = x_tenant_key.strip()
@@ -49,10 +52,17 @@ class TenantAuthentication(BaseAuthentication):
                     f"Invalid Authorization header. Expected: '{self.keyword} <api_key>'."
                 )
 
-        try:
-            tenant = Tenant.objects.get(api_key=key)
-        except Tenant.DoesNotExist:
-            raise AuthenticationFailed("Invalid API key.")
+        tenant = Tenant.objects.filter(api_key=key).first()
+        if tenant is None:
+            # Also check if key is a valid Tenant UUID (e.g. from X-Tenant-ID: <uuid>)
+            try:
+                parsed_uuid = uuid.UUID(key)
+                tenant = Tenant.objects.filter(id=parsed_uuid).first()
+            except (ValueError, TypeError):
+                pass
+
+        if tenant is None:
+            raise AuthenticationFailed("Invalid API key or Tenant ID.")
 
         return (TenantPrincipal(tenant), None)
 
