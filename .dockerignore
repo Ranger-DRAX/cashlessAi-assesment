@@ -1,0 +1,30 @@
+# Git history (not needed inside the container, saves build time & image size)
+.git
+.gitignore
+
+# Docker configuration files
+Dockerfile*
+docker-compose*.yml
+
+# Python / Environment (already in your .gitignore)
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Tests and Coverage (already in your .gitignore)
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# IDE / OS (already in your .gitignore)
+.vscode/
+.idea/
+.DS_Store
+#Markdown file
+*.md
+!README.md

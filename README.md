@@ -4,7 +4,35 @@ A multi-tenant REST API built with **Django + Django REST Framework** and backed
 
 ---
 
-## Local Setup
+## Setup & Running
+
+### Option 1: Run with Docker (Recommended)
+
+**Prerequisites:** Docker and Docker Compose installed.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Ranger-DRAX/cashlessAi-assesment.git
+cd cashlessAi-assesment
+
+# 2. Build and start the entire stack (PostgreSQL + API + Auto-migrations)
+docker compose up --build
+```
+
+The API is now running at `http://localhost:8000/api/` with database migrations automatically applied.
+
+#### Running Tests with Docker:
+```bash
+# Run the 130 Django unit and integration tests:
+docker compose exec web python manage.py test -v 2
+
+# Run the 103 live end-to-end assertions:
+docker compose exec web python E2echeck.py
+```
+
+---
+
+### Option 2: Local Setup (without Docker)
 
 **Prerequisites:** Python 3.11+, PostgreSQL running locally.
 
@@ -90,7 +118,11 @@ With the server running, open **[http://localhost:8000/api/docs/](http://localho
 With the server running (`python manage.py runserver`), run the cross-platform end-to-end verification script (pure Python standard library, zero extra dependencies):
 
 ```bash
-python E2echeck.py
+# Option A: From your host machine (against http://localhost:8000)
+python wallets/tests/E2echeck.py
+
+# Option B: Inside Docker container
+docker compose exec web python wallets/tests/E2echeck.py
 ```
 *Executes **103 assertions** verifying the entire lifecycle, multi-tenant isolation, idempotency replay vs conflict, strict input validation, multi-threaded concurrency barriers, and ledger sum mathematical invariants.*
 
@@ -98,7 +130,11 @@ python E2echeck.py
 Run the 130 internal test cases (runs against an isolated, automated test database — no dev server required):
 
 ```bash
+# Local:
 python manage.py test -v 2
+
+# Docker:
+docker compose exec web python manage.py test -v 2
 ```
 
 ### 3. Test Coverage Report
