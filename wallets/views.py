@@ -7,6 +7,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+
 from tenants.authentication import TenantPrincipal
 from tenants.permissions import IsTenantAuthenticated
 from wallets.pagination import TransactionCursorPagination
@@ -39,6 +41,12 @@ class TenantScopedAPIView(APIView):
 
 
 class CustomerCreateView(TenantScopedAPIView):
+    @extend_schema(
+        request=CustomerSerializer,
+        responses={201: CustomerResponseSerializer},
+        summary="Create a customer and wallet",
+        description="Creates a new customer under the authenticated tenant along with a default BDT wallet (balance 0).",
+    )
     def post(self, request: Request) -> Response:
         serializer = CustomerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -59,6 +67,12 @@ class CustomerCreateView(TenantScopedAPIView):
 
 
 class WalletDepositView(TenantScopedAPIView):
+    @extend_schema(
+        request=DepositSerializer,
+        responses={200: TransactionSerializer},
+        summary="Deposit funds into a wallet",
+        description="Deposits an integer amount into the specified wallet. Requires an idempotency key (via body or Idempotency-Key header).",
+    )
     def post(self, request: Request, wallet_id: UUID) -> Response:
         serializer = DepositSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -74,6 +88,12 @@ class WalletDepositView(TenantScopedAPIView):
 
 
 class WalletWithdrawView(TenantScopedAPIView):
+    @extend_schema(
+        request=WithdrawSerializer,
+        responses={200: TransactionSerializer},
+        summary="Withdraw funds from a wallet",
+        description="Withdraws an integer amount from the specified wallet. Returns 402 if balance is insufficient.",
+    )
     def post(self, request: Request, wallet_id: UUID) -> Response:
         serializer = WithdrawSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -89,6 +109,20 @@ class WalletWithdrawView(TenantScopedAPIView):
 
 
 class WalletTransferView(TenantScopedAPIView):
+    @extend_schema(
+        request=TransferSerializer,
+        responses={
+            200: inline_serializer(
+                name="TransferResponse",
+                fields={
+                    "debit": TransactionSerializer(),
+                    "credit": TransactionSerializer(),
+                },
+            )
+        },
+        summary="Transfer funds between two wallets",
+        description="Transfers an integer amount between two wallets owned by the same tenant. Atomically debits sender and credits receiver.",
+    )
     def post(self, request: Request) -> Response:
         serializer = TransferSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -111,6 +145,11 @@ class WalletTransferView(TenantScopedAPIView):
 
 
 class WalletBalanceView(TenantScopedAPIView):
+    @extend_schema(
+        responses={200: WalletBalanceSerializer},
+        summary="Get wallet balance",
+        description="Returns the current cached balance and currency for a wallet owned by the authenticated tenant.",
+    )
     def get(self, request: Request, wallet_id: UUID) -> Response:
         wallet = get_wallet_for_tenant(request.tenant, wallet_id)
         balance = get_balance(wallet)
@@ -121,6 +160,11 @@ class WalletBalanceView(TenantScopedAPIView):
 class WalletTransactionsView(TenantScopedAPIView):
     pagination_class = TransactionCursorPagination
 
+    @extend_schema(
+        responses={200: TransactionSerializer(many=True)},
+        summary="Get paginated transaction history",
+        description="Returns transaction history for a wallet, ordered newest-first with cursor-based pagination.",
+    )
     def get(self, request: Request, wallet_id: UUID) -> Response:
         wallet = get_wallet_for_tenant(request.tenant, wallet_id)
         txns = get_transaction_history(request.tenant, wallet)

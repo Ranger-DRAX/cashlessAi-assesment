@@ -57,96 +57,56 @@ Authorization: Api-Key <your_api_key>
 
 ---
 
-## API Reference & curl Examples
+## Interactive Documentation (Swagger UI)
 
-All mutating endpoints require an `idempotency_key` field (or `Idempotency-Key` header). Using the same key + same payload is safe to retry; the same key with different payload returns `409 Conflict`.
+With the server running, open **[http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)** in your browser.
+- Full OpenAPI 3.0 schema with interactive request builders and documentation.
+- Click the green **Authorize 🔓** button and enter your API key to test any endpoint directly from your browser.
 
-### Create a tenant
+---
 
-```bash
-curl -X POST http://localhost:8000/api/tenants/ \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Acme Inc"}'
-```
+## API Endpoints Reference
 
-### Create a customer (+ wallet)
+| Method | Endpoint | Auth Required | Description |
+| :--- | :--- | :---: | :--- |
+| `POST` | `/api/tenants/` | No | Register a new tenant organisation and receive an API key |
+| `POST` | `/api/customers/` | Yes | Create a customer and default BDT wallet (balance 0) |
+| `POST` | `/api/wallets/{id}/deposit/` | Yes | Deposit funds into a wallet (idempotent) |
+| `POST` | `/api/wallets/{id}/withdraw/` | Yes | Withdraw funds from a wallet (rejects with 402 if balance insufficient) |
+| `POST` | `/api/wallets/transfer/` | Yes | Atomically transfer funds between two wallets of the same tenant |
+| `GET`  | `/api/wallets/{id}/balance/` | Yes | Get the current cached balance and currency |
+| `GET`  | `/api/wallets/{id}/transactions/` | Yes | Get paginated transaction history (cursor-based, newest-first) |
 
-One call creates both a `Customer` and their initial `Wallet` (balance 0).
+### Key Guarantees
+- **Idempotency**: All mutating endpoints (`deposit`, `withdraw`, `transfer`) require an idempotency key via the `"idempotency_key"` JSON field or `Idempotency-Key` HTTP header. Replaying with the same payload returns the original transaction receipt (`200 OK`); reusing the key with a different payload returns `409 Conflict`.
+- **Strict Integer Amounts**: Amounts must be positive integers up to PostgreSQL `bigint` max (`9,223,372,036,854,775,807`). Floats and strings (e.g. `"100"`, `100.5`) are rejected with `400 Bad Request`.
+- **Tenant Isolation**: Every query filters by `tenant=request.tenant`. Cross-tenant requests return generic `404 Not Found` to prevent resource existence enumeration.
 
-```bash
-export API_KEY="<your_api_key>"
+---
 
-curl -X POST http://localhost:8000/api/customers/ \
-  -H "Authorization: Api-Key $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "alice", "email": "alice@example.com"}'
-```
+## Verification & Testing
 
-Save the returned `wallet_id` as `WALLET_ID`.
-
-```bash
-export WALLET_ID="<alice_wallet_id>"
-```
-
-Create a second customer for transfer testing:
-
-```bash
-curl -X POST http://localhost:8000/api/customers/ \
-  -H "Authorization: Api-Key $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "bob", "email": "bob@example.com"}'
-```
-
-Save bob's `wallet_id` as `BOB_WALLET_ID`.
+### 1. Automated Live End-to-End Suite (`E2echeck.py`)
+With the server running (`python manage.py runserver`), run the cross-platform end-to-end verification script (pure Python standard library, zero extra dependencies):
 
 ```bash
-export BOB_WALLET_ID="<bob_wallet_id>"
+python E2echeck.py
 ```
+*Executes **103 assertions** verifying the entire lifecycle, multi-tenant isolation, idempotency replay vs conflict, strict input validation, multi-threaded concurrency barriers, and ledger sum mathematical invariants.*
 
-### Deposit funds
+### 2. Django Unit & Integration Test Suite
+Run the 130 internal test cases (runs against an isolated, automated test database — no dev server required):
 
 ```bash
-curl -X POST http://localhost:8000/api/wallets/$WALLET_ID/deposit/ \
-  -H "Authorization: Api-Key $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 10000, "idempotency_key": "dep-001"}'
+python manage.py test -v 2
 ```
 
-### Withdraw funds
-
+### 3. Test Coverage Report
 ```bash
-curl -X POST http://localhost:8000/api/wallets/$WALLET_ID/withdraw/ \
-  -H "Authorization: Api-Key $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 2000, "idempotency_key": "wd-001"}'
+pip install coverage
+coverage run manage.py test
+coverage report
 ```
-
-Returns `402 Payment Required` with `"error": "insufficient_funds"` if the balance is too low.
-
-### Transfer funds
-
-```bash
-curl -X POST http://localhost:8000/api/wallets/transfer/ \
-  -H "Authorization: Api-Key $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"from_wallet_id\": \"$WALLET_ID\", \"to_wallet_id\": \"$BOB_WALLET_ID\", \"amount\": 3000, \"idempotency_key\": \"xfer-001\"}"
-```
-
-### Get wallet balance
-
-```bash
-curl http://localhost:8000/api/wallets/$WALLET_ID/balance/ \
-  -H "Authorization: Api-Key $API_KEY"
-```
-
-### Get transaction history (paginated)
-
-```bash
-curl "http://localhost:8000/api/wallets/$WALLET_ID/transactions/" \
-  -H "Authorization: Api-Key $API_KEY"
-```
-
-Returns cursor-paginated results (newest first). Follow `"next"` to get older pages.
 
 ---
 
@@ -161,15 +121,15 @@ Every error response (including validation errors) follows one consistent shape:
 }
 ```
 
-| Status | `error` code | Trigger |
-|--------|-------------|---------|
-| 400 | `invalid_amount` | Amount ≤ 0 |
-| 400 | `same_wallet_transfer` | `from_wallet_id == to_wallet_id` |
-| 400 | `validation_error` | DRF serializer failure |
-| 401 | `not_authenticated` | Missing or invalid `Api-Key` header |
-| 402 | `insufficient_funds` | Balance < requested withdrawal/transfer |
-| 404 | `wallet_not_found` | Wallet doesn't exist or belongs to another tenant |
-| 409 | `idempotency_key_conflict` | Same key reused with different payload |
+| Status | `error` code               | Trigger                                           |
+| --------| ----------------------------| ---------------------------------------------------|
+| 400    | `invalid_amount`           | Amount ≤ 0                                        |
+| 400    | `same_wallet_transfer`     | `from_wallet_id == to_wallet_id`                  |
+| 400    | `validation_error`         | DRF serializer failure                            |
+| 401    | `not_authenticated`        | Missing or invalid `Api-Key` header               |
+| 402    | `insufficient_funds`       | Balance < requested withdrawal/transfer           |
+| 404    | `wallet_not_found`         | Wallet doesn't exist or belongs to another tenant |
+| 409    | `idempotency_key_conflict` | Same key reused with different payload            |
 
 ---
 

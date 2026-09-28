@@ -21,6 +21,7 @@ INSTALLED_APPS: list[str] = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "tenants",
     "wallets",
 ]
@@ -91,4 +92,23 @@ REST_FRAMEWORK: dict = {
     "DEFAULT_PAGINATION_CLASS": "wallets.pagination.TransactionCursorPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "wallets.exceptions.wallet_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS: dict = {
+    "TITLE": "Cashless Wallet API",
+    "DESCRIPTION": "Multi-tenant wallet API with idempotent deposits, withdrawals, and transfers.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": "Enter your key in this format: Api-Key <your_api_key>",
+            }
+        }
+    },
+    "SECURITY": [{"ApiKeyAuth": []}],
 }

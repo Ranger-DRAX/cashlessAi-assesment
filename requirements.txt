@@ -4,3 +4,4 @@ psycopg2-binary==2.9.13
 python-decouple==3.8
 black==26.5.1
 isort==9.0.1
+drf-spectacular==0.30.0

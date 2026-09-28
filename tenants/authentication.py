@@ -25,16 +25,32 @@ class TenantAuthentication(BaseAuthentication):
     def authenticate(self, request: Request) -> Optional[Tuple[TenantPrincipal, None]]:
         auth_header = request.META.get("HTTP_AUTHORIZATION")
         if auth_header is None:
-            return None
-
-        parts = auth_header.split()
-        if len(parts) != 2 or parts[0] != self.keyword:
-            raise AuthenticationFailed(
-                f"Invalid Authorization header. Expected: '{self.keyword} <api_key>'."
-            )
+            # Fallback to X-Tenant-ID header per spec requirement
+            x_tenant_key = request.META.get("HTTP_X_TENANT_ID") or request.META.get("HTTP_X_TENANT_KEY")
+            if not x_tenant_key:
+                return None
+            key = x_tenant_key.strip()
+        else:
+            parts = auth_header.split()
+            if len(parts) == 2:
+                if parts[0].rstrip(":").lower() != self.keyword.lower():
+                    raise AuthenticationFailed(
+                        f"Invalid Authorization header. Expected: '{self.keyword} <api_key>'."
+                    )
+                key = parts[1].strip("<>\"' ")
+            elif len(parts) == 1:
+                if parts[0].rstrip(":").lower() == self.keyword.lower():
+                    raise AuthenticationFailed(
+                        f"Invalid Authorization header. Expected: '{self.keyword} <api_key>'."
+                    )
+                key = parts[0].strip("<>\"' ")
+            else:
+                raise AuthenticationFailed(
+                    f"Invalid Authorization header. Expected: '{self.keyword} <api_key>'."
+                )
 
         try:
-            tenant = Tenant.objects.get(api_key=parts[1])
+            tenant = Tenant.objects.get(api_key=key)
         except Tenant.DoesNotExist:
             raise AuthenticationFailed("Invalid API key.")
 
@@ -42,3 +58,21 @@ class TenantAuthentication(BaseAuthentication):
 
     def authenticate_header(self, request: Request) -> str:
         return self.keyword
+
+
+try:
+    from drf_spectacular.extensions import OpenApiAuthenticationExtension
+
+    class TenantApiKeyScheme(OpenApiAuthenticationExtension):
+        target_class = "tenants.authentication.TenantAuthentication"
+        name = "ApiKeyAuth"
+
+        def get_security_definition(self, auto_schema: object) -> dict:
+            return {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": "Enter your key in this format: Api-Key <your_api_key>",
+            }
+except ImportError:
+    pass
